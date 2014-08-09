@@ -1,20 +1,161 @@
-# Reproducible Research: Peer Assessment 1
+---
+title: "Reproducible Research - Programming Assignment 1"
+output:
+  html_document: default
+---
 
+### Introduction
 
-## Loading and preprocessing the data
+Health cautious individuals have the means to measure their daily activities by wearing devices that measure their movement and translates the extend of movement to number of steps,as if you would be walking in the park. Some doctors are recommending these monitoring devices to patients who need the stimulation to stay physically active. 
 
+Using the data set produced from a device worn by a volunteer 24 hours a day over two months we would like to analyze the measured data (number of steps), collected every 5 minutes to assess the effectiveness of this experiment and to a certain degree the daily activities of the subject.
 
+### Data Set
 
-## What is mean total number of steps taken per day?
+The data set can be downloaded from the site: 
+[Dataset: Activity monitoring data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip) 
 
+The variables included in this data set are:
 
+* steps: Number of steps taking in a 5-minute interval (missing values are coded as NA)    
+* date: The date on which the measurement was taken in YYYY-MM-DD format    
+* interval: Identifier for the 5-minute interval in which measurement was taken    
 
-## What is the average daily activity pattern?
+The data set is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this data set.
 
+### Exploratory Analysis
 
+Following steps are taken to explore the data, analyze, and conclude the study:
 
-## Imputing missing values
+1. Load the data set and the required libraries.  
+2. Remove all NAs, if any, in the data set.   
+3. Day-to-day pattern - Calculate and plot the total number of steps for each day.  
+    + Is there a noticeable patter that could indicate the subject is more or less active in certain days of the week or certain weeks of the month, or in a given month.  
+4. Daily pattern - Calculate and plot the mean of steps for each interval across all days.    
+    + Is there a noticeable pattern from one day to another.   
+    + At what time of the day the subject is more active compared to the rest of the day.  
+5. Did removal of NAs from the original data set add some bias to the outcome?   
+    + Instead of removing the NAs, replace them with the summarized data conducted in previous calculations, i.e. sum of steps for each day or average of steps for each interval.   
+    + Repeat the above analysis with the new data set and compare for any significant difference in patterns.  
+6. Is there a difference in subject activities during weekdays and weekends?  
 
+**Analysis**
+Read and prepare data for the analysis. Also remove all NAs in the data set
 
+```{r}
+library(ggplot2)
+library(plyr)
+library(gcookbook) 
+data <- read.csv2("repdata_data_activity/activity.csv",header=TRUE,sep=",",colClasses = "character")
+data$steps <- as.numeric(data$steps)
+data$interval <- as.numeric(data$interval)
+data1 <- data[!is.na(data$steps),]
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+__*Total steps per day*__  
+Calculate and plot the total number of steps for each day. 
+
+```{r}
+png(file = "plot14.png")
+dailyTotal <- ddply(data1, "date", summarise, daily_total = sum(steps))
+ggplot(dailyTotal, aes(x=date, y=daily_total)) +
+    geom_bar(stat="identity", fill="lightblue", colr="black") +
+    ggtitle("Total number of steps taken each day") +
+    theme(axis.text.x = element_text(angle=90))
+summary(dailyTotal$daily_total)[c("Median","Mean")]
+dev.off()
+```
+
+Except for few days, there is some degree of consistency in the subjects' daily activities. It seems subject has been determined to keep his/her pace the same on daily basis. Whether these activities were related to work or regular daily exercise, this chart does not reflect that.  
+
+__*Daily pattern*__   
+Calculate and plot the mean of steps for each interval across all days.      
+
+```{r}
+intMean <- ddply(data1, "interval", summarise, Average_Interval = mean(steps))
+ggplot(intMean,aes(x=c(1:nrow(intMean)),y=Average_Interval)) + geom_line() + geom_point() +
+    xlab("Intervals (288 per day)") + ylab("Average number of steps") +
+    ggtitle("Average number of steps taken per interval, across all (61) days")
+maxval <- intMean[intMean$Average_Interval==max(intMean$Average_Interval),]
+maxval[-1]
+```
+
+There is a pattern in daily activities. In early morning subject seems to be  moving around the house, occasionally. The activities pick up in the morning and fluctuates throughout the day. Maximum peak of mean values is `r round(maxval[2],1)`, which occurs in interval `r n <- rownames(maxval); n`, near `r round(as.numeric(n)/12,0)` AM.        
+
+__*Effect of NA*__  
+Instead of removing NAs, replace them with the summarized data conducted in previous calculations, i.e. sum of steps for each day or average of steps for each interval.   
+  
+With `r nrow(data)-nrow(data1)` NAs removed from the original data set we would like to assess if the missing data could have introduced bias data. 
+
+By removing NAs from the original data set we have eliminated `r miss <- subset(data, is.na(data$steps), drop=F); nrow(miss)` observations that are scattered over `r length(unique(miss$date))` days, {`r unique(miss$date)`}, none of which appear in the data set w/o NA.
+
+Since estimating the mean or median for the missing days is not possible due to lack of data, we have to resort to an approach that closely represents the total steps for that day. Considering the pattern of daily activities from the average interval, it makes a lot sense to use the average of steps for each interval of missing days, and recalculate the average for each interval across all days as well as the daily total steps. 
+
+To create the new data set we merge the original data with the interval mean (intMean) data frame to match the intervals and bring the associated data into one table. Then, by walking through the new table replace the missing steps (NA) with the average of corresponding interval, as shown below.  
+
+```{r}
+newdata <- merge(data,intMean,by="interval")
+for (i in 1:nrow(newdata)) if (is.na(newdata$steps[i])) newdata$steps[i] <- newdata$Average_Interval[i]    
+```
+
+Plots of new data set for daily total: 
+
+```{r}
+# New Data set: Plot total steps per day
+dailyTotNA <- ddply(newdata, "date", summarise, daily_total_noNA = sum(steps))
+ggplot(dailyTotNA, aes(x=date, y=daily_total_noNA)) + 
+    geom_bar(stat="identity", fill="lightgreen", colr="black") +
+    theme(axis.text.x = element_text(angle=90)) +
+    xlab("Date") + ylab("Daily Total Number of Steps") +
+    ggtitle("New dataset: Total number of steps taken per day, across all (288) intervals")
+```
+
+For convenience generating the Median and Mean for both data sets, with and w/o NA.
+
+```{r}
+# Median and Mean of total steps in new data
+summary(dailyTotNA$daily_total_noNA)[c("Median","Mean")]
+# Median and Mean of total steps in previous data w/o NA"
+summary(dailyTotal$daily_total)[c("Median","Mean")]
+```
+
+Plots of new data set for interval means:
+
+```{r}
+# New Data set: Plot average of steps for each interval, accross all days
+intMeanNA <- ddply(newdata, "interval", summarise, Average_noNA = mean(steps))
+ggplot(intMeanNA,aes(x=c(1:nrow(intMeanNA)),y=Average_noNA)) + geom_line() + geom_point() +
+    xlab("Intervals (288 per day)") + ylab("Average number of steps") +
+    ggtitle("New dataset: Average number of steps taken per interval, across all (61) days")
+summary(intMeanNA$Average_noNA)
+summary(intMean$Average_Interval)
+```
+
+As expected, because we used the existing summary data to estimate the missing data, there isn't noticeable change between patterns of data with or without the NAs. 
+
+__*Weekdays vs Weekends*__  
+Is there a difference in subject's activities during weekdays and weekends?
+
+I used "Factor"" to split the data into weekdays and weekend subsets. 
+```{r}
+newdata$wkd <- as.factor(weekdays(as.POSIXlt(newdata$date, format="%Y-%M-%d")))
+levels(newdata$wkd)[c(3:4)] <- "Weekend"
+levels(newdata$wkd)[c(1,2,4,5,6)] <- "Weekday"
+
+wkdayend <- ddply(newdata, c("wkd", "interval"), summarise, Int_mean = mean(steps))
+
+ggplot(wkdayend,aes(x=interval, y=Int_mean, color=wkd)) + geom_line(size=1) + 
+    geom_point(size=2, shape=21, fill="white") + facet_grid(wkd ~ .) + 
+    xlab("Activity Interval (5 mins)") + ylab("Mean of total steps per interval") + 
+    ggtitle("Activity Recorded Over Weekdays and Weekends") +
+    theme(legend.position="none", strip.text=element_text(face="bold", size=rel(1)),
+          strip.background=element_rect(fill="lightblue", colour="black", size=1))
+```
+
+Slight higher activity on weekends. 
+
+```{r}
+summary(wkdayend[wkdayend$wkd=="Weekday",3])
+summary(wkdayend[wkdayend$wkd=="Weekend",3])
+```
+
