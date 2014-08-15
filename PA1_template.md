@@ -4,11 +4,11 @@
 
 Monitoring devices are being used by health cautious people as well as certain patients to record and track their daily physical activities. Translated to the number of steps taken, these data can help individuals to make adjustment to their daily workouts and even changing their life style for a healthier life.  
 
-Using the data set produced from a device worn by a volunteer for 24 hours a day over two months we would like to analyze the measured data (number of steps), collected every 5 minutes to assess if there is a trend in his/her daily activities.
+Using the data set produced from a device worn by a volunteer for 24 hours a day over two months we would like to analyze the measured data (number of steps), collected every 5 minutes to assess if there is a trend in the subject's daily activities.
 
 ### Data Set
 
-The data set can be downloaded from the site: 
+The data set is downloaded from this site: 
 [Dataset: Activity monitoring data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip) 
 
 The variables included in this data set are:
@@ -28,14 +28,17 @@ The data set is stored in a comma-separated-value (CSV) file and there are a tot
 
 
 ```r
+# Read data in and format
 library(ggplot2)
 library(plyr)
 library(gcookbook) 
 data <- read.csv2("repdata_data_activity/activity.csv",header=TRUE,sep=",",colClasses = "character")
 data$steps <- as.numeric(data$steps)
 data$interval <- as.numeric(data$interval)
+# Remove NAs
 data1 <- data[!is.na(data$steps),]
 ```
+Since variables Interval and Date did not have any NAs, the variable stps is used to remove rows with NAs.
 
 __*Total number of steps taken per day*__    
 
@@ -45,7 +48,7 @@ __*Total number of steps taken per day*__
 
 
 ```r
-#png(file = "plot14.png")
+# Calculate total steps for each day and plot
 dailyTotal <- ddply(data1, "date", summarise, daily_total = sum(steps))
 ggplot(dailyTotal, aes(x=date, y=daily_total)) +
     geom_bar(stat="identity", fill="lightblue", colr="black") +
@@ -56,6 +59,7 @@ ggplot(dailyTotal, aes(x=date, y=daily_total)) +
 ![plot of chunk unnamed-chunk-2](./PA1_template_files/figure-html/unnamed-chunk-2.png) 
 
 ```r
+# Print Mean and Median of daily total steps
 mean(dailyTotal$daily_total)
 ```
 
@@ -71,14 +75,11 @@ median(arrange(dailyTotal,daily_total)$daily_total)
 ## [1] 10765
 ```
 
-```r
-#dev.off()
-```
-
-There is inconsistency in daily activities, since total number of steps is not uniform across all days. Few days have much smaller values than the visual average. To check if these values fall in a specific day of the week I calculated and plotted the average of the totals for days of the week, which shows the average of weekdays across the eight weeks of monitoring is much lower on Wednesday's. This could be because data for few Wednesdays are missing. More on this is discussed in section "Missing observations".
+There is inconsistency in subject's daily activities, since total number of steps is not uniform across all days. Few days have much smaller values than the visual average. Let's check if the low values fall in a specific day of the week. I calculated and plotted means of total steps taken in each day of the week averaged across eight weeks of monitoring. Data for Wednesday show lower mean due to missing values (NAs). Large percentage of missing data happen to be on wednesdays. More on this is discussed in section "Missing observations".
 
 
 ```r
+# Total by weekdays across all weeks.
 dailyTotal$wkd <- as.factor(weekdays(as.POSIXlt(dailyTotal$date, format="%Y-%M-%d")))
 weekly <- ddply(dailyTotal, "wkd", summarise, wkd_mean = mean(daily_total))
 ggplot(weekly, aes(x=wkd, y=wkd_mean)) +
@@ -97,6 +98,7 @@ __*Daily activity pattern*__
 
 
 ```r
+# Average per interval across all days
 intMean <- ddply(data1, "interval", summarise, Average_Interval = mean(steps))
 ggplot(intMean,aes(x=c(1:nrow(intMean)),y=Average_Interval)) + geom_line() + geom_point() +
     xlab("Intervals (288 per day)") + ylab("Average number of steps") +
@@ -111,7 +113,7 @@ peak <- round(maxval[2],1)
 interval <- rownames(maxval)
 ```
 
-There is a clear pattern in daily activities. In early morning subject seems to be  moving around the house, occasionally. The activities pick up in the morning and fluctuates throughout the day with the maximum peak value of 206.2, which occurs in interval 104, around 9 AM.        
+There is a clear pattern in daily activities. Activities pick up in the morning and fluctuates throughout the day with the maximum peak value of 206.2, which occurs in interval 104, around 9 AM.        
 
 __*Imputing missing values*__  
 
@@ -126,8 +128,11 @@ The presence of missing days may introduce bias into some calculations or summar
 
 __*Missing observations*__  
 
+Calculate number of missing observation and then match them against the dates and the days of a week. 
+
 
 ```r
+# Calculate number of missing observations and the day of week they occured. 
 miss_obs <- subset(data, is.na(data$steps), drop=F)
 uniq_missing_date <- unique(miss_obs$date)
 wday <- as.factor(weekdays(as.POSIXlt(uniq_missing_date, format="%Y-%M-%d")))
@@ -149,16 +154,17 @@ wday
 ## Levels: Friday Saturday Thursday Tuesday Wednesday
 ```
 
-The original data set has 2304 NAs in the steps variable, which belong to 8 days. That is, there isn't a single observation for either of the missing days, perhaps the subject was not wearing the device on those days.   
+The original data set has 2304 NAs in the steps variable, which belong to 8 days. That is, there isn't a single observation for either of the missing days, perhaps the subject was not wearing the device on those days. Most of the missing data happens on wednesday of the week.  
 
 __*Strategy to compensate for missing observations*__  
 
-Estimating the mean or median for the missing days is not possible due to lack of measurement. For total daily steps we could use the data in "weekly" bar graph (calculated above) for any missing day of the week, but these data can not be used for replacing the missing interval data. However, we could use the interval averages for calculating both daily total and average interval.   
+Estimating the mean or median for the missing days is not possible due to lack of measurement for that day. For total daily steps we could use the data in "weekly" bar graph (calculated above) for any missing day of the week, but these data can not be used for replacing the missing interval data. However, we could use the interval averages for calculating both daily total and average interval.   
 
-To create the new data set we merge the original data with the interval mean (intMean) data frame to match the intervals and to bring the associated data (Average_Interval) into one table. Then, by walking through the new table replace the missing steps (NA) with the average of corresponding interval.   
+To create the new data set we merge the original data with the interval mean (intMean) data frame to match the intervals and to bring the associated data (Average_Interval) into one table. Then, by walking through the new table replace the missing steps (NA) with the average of corresponding interval.  
 
 
 ```r
+# Use interval means to replace missing observations for each interval of the missing day
 newdata <- merge(data,intMean,by="interval")
 for (i in 1:nrow(newdata)) if (is.na(newdata$steps[i])) newdata$steps[i] <- newdata$Average_Interval[i]    
 ```
@@ -209,7 +215,7 @@ ggplot(intMeanNA,aes(x=c(1:nrow(intMeanNA)),y=Average_noNA)) + geom_line() + geo
 
 ![plot of chunk unnamed-chunk-8](./PA1_template_files/figure-html/unnamed-chunk-8.png) 
 
-As expected, because we used the average to estimate the missing data, there isn't a noticeable change between patterns of data with or without replacing NAs. 
+As expected, because we used the daily average and interval average to estimate the missing data, there aren't any noticeable change between patterns of data with or without replacing NAs. Averages of intervals across all days show a better fit because it covers a larger (288*61) sample size (basline).   
 
 __*Weekdays vs Weekends*__  
 
@@ -218,7 +224,6 @@ Are there differences in activity patterns between weekdays and weekends?
 
 ```r
 # Create a factor and convert day of the week to weekday and weekend.
-
 newdata$wkd <- as.factor(weekdays(as.POSIXlt(newdata$date, format="%Y-%M-%d")))
 levels(newdata$wkd)[c(3:4)] <- "Weekend"
 levels(newdata$wkd)[c(1,2,4,5,6)] <- "Weekday"
@@ -235,10 +240,11 @@ ggplot(wkdayend,aes(x=INTERVAL, y=Int_mean, color=wkd)) + geom_line(size=1) +
 
 ![plot of chunk unnamed-chunk-9](./PA1_template_files/figure-html/unnamed-chunk-9.png) 
 
-On the average, activities are the same during weekdays and weekends. This could very well indicate that activities on weekends has to be more intensive. This can be verified in a boxplot, shown below. To get a better picture, I removed the noise (data between evening and early morning) from the data set.  
+On the average, activities are the same during weekdays and weekends. This could very well indicate that the subject's activities were more intense over the weekend. This can be verified in a boxplot, shown below. To get a better picture, I removed the noise (data between evening and early morning) from the data set to focus on subject's active time.  
 
 
 ```r
+# Verify weekends' higher activities compared to weekdays
 highActive <- wkdayend[wkdayend$INTERVAL>70 & wkdayend$INTERVAL<260,]
 ggplot(highActive, aes(x=wkd, y=Int_mean)) + geom_boxplot()
 ```
